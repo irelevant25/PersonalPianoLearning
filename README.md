@@ -9,10 +9,13 @@ JSON files on your machine.
 
 ## How to run
 
-The only real prerequisite is `git`. The launcher scripts take care of
-everything else — you don't need Node.js pre-installed.
+No prerequisites needed — the launcher scripts take care of everything,
+including Node.js, which you don't need pre-installed.
 
-1. Clone the repo and `cd` into it.
+1. Get the project onto your machine, then open a terminal in that folder:
+   - Just want to use the app: download it as a ZIP (e.g. GitHub's
+     "Code → Download ZIP") and extract it.
+   - Developing on it: `git clone` the repo instead.
 2. Plug your piano into the PC via USB (optional to just browse the app,
    required for practice features).
 3. Run the launcher for your OS from the project root:
