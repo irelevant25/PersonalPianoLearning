@@ -1,0 +1,4 @@
+node_modules/
+
+# Local practice data (per-learner progress/sessions) - never shared, no DB.
+server/data/*.json
