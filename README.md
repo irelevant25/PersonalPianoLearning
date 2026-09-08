@@ -9,44 +9,18 @@ JSON files on your machine.
 
 ## How to run
 
-No prerequisites needed — the launcher scripts take care of everything,
-including Node.js, which you don't need pre-installed.
-
-1. Get the project onto your machine, then open a terminal in that folder:
-   - Just want to use the app: download it as a ZIP (e.g. GitHub's
-     "Code → Download ZIP") and extract it.
-   - Developing on it: `git clone` the repo instead.
-2. Plug your piano into the PC via USB (optional to just browse the app,
-   required for practice features).
-3. Run the launcher for your OS from the project root:
-   - Windows (PowerShell): `.\start.ps1`
+1. Download the project (ZIP via GitHub's "Code → Download ZIP", or
+   `git clone` if you're developing) and extract/open it.
+2. Plug your piano into the PC via USB.
+3. Run the launcher:
+   - Windows: double-click `start.ps1` (or run `.\start.ps1` in PowerShell)
    - macOS/Linux: `./start.sh`
 
-   What it does, in order:
-   - Verifies you're in the project root (checks for `.nvmrc`/`package.json`).
-   - Checks for [nvm](https://github.com/nvm-sh/nvm) ([nvm-windows](https://github.com/coreybutler/nvm-windows)
-     on Windows) and offers to install it if it's missing.
-   - Installs and activates the exact Node.js version this project needs
-     (currently `22.15.0`, from `package.json`/`.nvmrc`) via nvm, without
-     touching any Node.js you already have installed for other projects.
-   - Runs `npm ci` (or `npm install` if there's no lockfile yet) to
-     install dependencies.
-   - Asks for confirmation, then starts the server and opens your default
-     browser at it automatically.
-
-   First run may prompt for a few confirmations (installing nvm, installing
-   Node, starting the app) — answering yes (the default) is what you want.
-   Press `Ctrl+C` in that terminal to stop the server.
-4. Make sure the browser tab is **Chrome or Edge** (required — see
-   [Browser support](#browser-support)); the launcher opens
-   `http://127.0.0.1:3002` by default.
+   It installs everything it needs on first run and then opens the app in
+   your browser automatically. Press `Ctrl+C` in that terminal to stop it.
+4. Use **Chrome or Edge** (required — see [Browser support](#browser-support)).
 5. In the header, pick your piano from the device dropdown and click
-   **Connect**. Chrome will ask for MIDI permission the first time.
-
-If you already have Node.js 22.15.0 active (e.g. via your own nvm setup)
-and just want to skip the interactive checks: `npm install && npm start`
-does the same thing directly. The host/port are set in `package.json`'s
-`"config"` block if you ever need to change them.
+   **Connect**.
 
 ## How it works
 
