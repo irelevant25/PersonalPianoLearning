@@ -15,6 +15,15 @@ export async function saveProgress(progress) {
   if (!res.ok) throw new Error(`Failed to save progress: ${res.status}`);
 }
 
+export async function savePath(pathProgress) {
+  const res = await fetch('/api/path', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(pathProgress),
+  });
+  if (!res.ok) throw new Error(`Failed to save path progress: ${res.status}`);
+}
+
 export async function recordSession(session) {
   const res = await fetch('/api/sessions', {
     method: 'POST',

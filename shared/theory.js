@@ -42,16 +42,17 @@ export const MIDDLE_C = 60;
 
 /**
  * Curriculum: the order in which notes are introduced.
- * MVP covers two diatonic (white-key only) octaves around Middle C, alternating
- * between the right-hand and left-hand five-finger positions so both hands
- * develop together. Sharps/flats and notes outside C3-C5 are a deliberate
+ * Covers two diatonic (white-key only) octaves around Middle C: the whole
+ * right hand first, then the left hand - the same order as the learning path
+ * (shared/path.js), whose units introduce exactly these notes in this order.
+ * Keep the two in sync. Sharps/flats and notes outside C3-C5 are a deliberate
  * extension point for later (see README "Extending the curriculum").
  */
 export const CURRICULUM = [
-  60, 62, 64, 65, 67, // C4 D4 E4 F4 G4 - right hand five-finger position
+  60, 62, 64, 67, 65, 69, // C4 D4 E4 G4 F4 A4 - right hand, in the order the path's songs need them
+  71, 72, // B4 C5 - extend right hand upward
   48, 50, 52, 53, 55, // C3 D3 E3 F3 G3 - left hand five-finger position
-  69, 71, 72, // A4 B4 C5 - extend right hand upward
-  59, 57, // B3 A3 - fill the gap below middle C
+  57, 59, // A3 B3 - fill the gap below middle C
 ];
 
 export function clefForMidi(midi) {

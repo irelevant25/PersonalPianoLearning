@@ -1,8 +1,6 @@
 import { midiToName } from '/shared/theory.js';
-import { gradeAttempt, updateNoteState } from '/shared/srs.js';
 import { PianoKeyboard } from '../keyboard.js';
-import { Notation } from '../notation.js';
-import { Metronome } from '../metronome.js';
+import { SequencePlayer, sessionFieldsFromResult } from '../sequence-player.js';
 
 const SEQUENCE_LENGTH = 6;
 const MIN_KNOWN_NOTES = 3;
@@ -37,27 +35,16 @@ export function renderSheet(container, ctx) {
     container.innerHTML = `
       <div class="card">
         <h2>Sheet Practice</h2>
-        <p>Learn at least ${MIN_KNOWN_NOTES} notes in Note Trainer first — you currently know ${knownTreble.length}.
+        <p>Learn at least ${MIN_KNOWN_NOTES} notes first — you currently know ${knownTreble.length}.
         Sheet Practice mixes whichever notes you've learned into a short piece of music for you to sight-read.</p>
-        <button id="sh-goto-trainer" type="button">Go to Note Trainer</button>
+        <button id="sh-goto-path" type="button">Go to the learning path</button>
       </div>
     `;
-    container.querySelector('#sh-goto-trainer').addEventListener('click', () => ctx.navigateTo('trainer'));
+    container.querySelector('#sh-goto-path').addEventListener('click', () => ctx.navigateTo('home'));
     return () => {};
   }
 
-  const progress = { ...ctx.getState().progress };
-  let sequence = generateSequence(knownTreble, SEQUENCE_LENGTH);
   let bpm = 80;
-  let index = 0;
-  let active = false;
-  let expectedTimes = [];
-  let secondsPerBeat = 60 / bpm;
-  let correctCount = 0;
-  let timingErrors = [];
-  let staveNotes = [];
-  let startedAt = null;
-  const metronome = new Metronome();
 
   container.innerHTML = `
     <div class="card">
@@ -82,116 +69,43 @@ export function renderSheet(container, ctx) {
     </div>
   `;
 
-  const notation = new Notation(container.querySelector('#sh-notation'));
   const keyboard = new PianoKeyboard(container.querySelector('#sh-keyboard'), { lowMidi: 48, highMidi: 84 });
   keyboard.markKnown(ctx.getKnownNotes());
   const feedbackEl = container.querySelector('#sh-feedback');
   const bpmSelect = container.querySelector('#sh-bpm');
   const startBtn = container.querySelector('#sh-start');
 
-  function draw() {
-    staveNotes = notation.renderSequence(sequence.map((midi) => ({ midi })));
+  const player = new SequencePlayer({
+    ctx,
+    notationEl: container.querySelector('#sh-notation'),
+    keyboard,
+    feedbackEl,
+    async onFinish(result) {
+      startBtn.disabled = false;
+      try {
+        await ctx.recordSession({ mode: 'sheet', ...sessionFieldsFromResult(result) });
+      } catch (err) {
+        console.error('Failed to record session', err);
+      }
+    },
+  });
+
+  function loadNewSheet() {
+    player.load(generateSequence(knownTreble, SEQUENCE_LENGTH).map((midi) => ({ midi })));
+    startBtn.disabled = false;
   }
-  draw();
+  loadNewSheet();
 
   bpmSelect.addEventListener('change', () => { bpm = Number(bpmSelect.value); });
   container.querySelector('#sh-new').addEventListener('click', () => {
-    sequence = generateSequence(knownTreble, SEQUENCE_LENGTH);
-    draw();
+    loadNewSheet();
     feedbackEl.textContent = 'New sheet ready. Press Start when you are.';
     feedbackEl.className = 'feedback';
   });
-
-  function markCurrent() {
-    staveNotes.forEach((n, i) => {
-      const el = n.getSVGElement();
-      if (!el) return;
-      el.classList.remove('is-current', 'is-correct', 'is-incorrect');
-      if (i === index) el.classList.add('is-current');
-    });
-  }
-
-  function startAttempt() {
-    active = true;
-    index = 0;
-    correctCount = 0;
-    timingErrors = [];
-    startedAt = new Date().toISOString();
-    secondsPerBeat = 60 / bpm;
-    keyboard.clearStates();
-    markCurrent();
-    feedbackEl.textContent = 'Listen to the 4-beat count-in, then play along.';
-    feedbackEl.className = 'feedback';
+  startBtn.addEventListener('click', () => {
     startBtn.disabled = true;
+    player.start({ mode: 'tempo', bpm });
+  });
 
-    const { expectedPerformanceTimes } = metronome.schedule(sequence.length, bpm, { leadInBeats: 4 });
-    expectedTimes = expectedPerformanceTimes;
-  }
-
-  async function finishAttempt() {
-    active = false;
-    startBtn.disabled = false;
-    const accuracy = Math.round((correctCount / sequence.length) * 100);
-    const avgTimingError = timingErrors.length
-      ? Math.round(timingErrors.reduce((a, b) => a + Math.abs(b), 0) / timingErrors.length)
-      : null;
-    feedbackEl.textContent = `Done — ${correctCount}/${sequence.length} correct (${accuracy}%)${avgTimingError !== null ? `, avg timing off by ${avgTimingError}ms` : ''}.`;
-    feedbackEl.className = accuracy >= 80 ? 'feedback feedback--correct' : 'feedback';
-
-    try {
-      await ctx.recordSession({
-        mode: 'sheet',
-        startedAt,
-        endedAt: new Date().toISOString(),
-        attempts: sequence.length,
-        correct: correctCount,
-        accuracy,
-        bpm,
-        avgTimingErrorMs: avgTimingError,
-      });
-    } catch (err) {
-      console.error('Failed to record session', err);
-    }
-  }
-
-  async function onNoteOn(e) {
-    if (!active) return;
-    const played = e.detail.midi;
-    const target = sequence[index];
-    const correct = played === target;
-    const timingErrorMs = e.detail.timestamp - expectedTimes[index];
-    const timingToleranceMs = secondsPerBeat * 1000 * 0.5;
-    const grade = gradeAttempt({ correct, timingErrorMs, timingToleranceMs });
-
-    progress[target] = updateNoteState(progress[target] || ctx.getNoteState(target), grade, timingErrorMs);
-    if (correct) { correctCount += 1; timingErrors.push(timingErrorMs); }
-
-    const el = staveNotes[index].getSVGElement();
-    if (el) {
-      el.classList.remove('is-current');
-      el.classList.add(correct ? 'is-correct' : 'is-incorrect');
-    }
-    keyboard.setKeyState(played, correct ? 'correct' : 'incorrect');
-    setTimeout(() => keyboard.clearStates(), 250);
-
-    try {
-      await ctx.saveProgress(progress);
-    } catch (err) {
-      console.error('Failed to save progress', err);
-    }
-
-    index += 1;
-    if (index >= sequence.length) {
-      finishAttempt();
-    } else {
-      markCurrent();
-    }
-  }
-
-  ctx.midi.addEventListener('noteon', onNoteOn);
-  startBtn.addEventListener('click', startAttempt);
-
-  return () => {
-    ctx.midi.removeEventListener('noteon', onNoteOn);
-  };
+  return () => player.destroy();
 }

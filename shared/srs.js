@@ -134,6 +134,14 @@ export function pickPracticeQueue(progressMap, curriculum, opts = {}) {
   return queue.slice(0, count).map((x) => x.midi);
 }
 
+/** How many started (learning/review) notes are due for review right now. */
+export function countDueNotes(progressMap, curriculum, now = Date.now()) {
+  return curriculum.filter((midi) => {
+    const s = progressMap[midi];
+    return s && (s.status === 'learning' || s.status === 'review') && s.dueAt && new Date(s.dueAt).getTime() <= now;
+  }).length;
+}
+
 /** Notes currently known well enough to appear in generated sheets/songs. */
 export function getKnownNotes(progressMap, curriculum) {
   return curriculum.filter((midi) => isUnlocked(progressMap[midi]));

@@ -19,6 +19,11 @@ export class Notation {
     return note;
   }
 
+  /** Tags each drawn note's SVG group with its pitch, so automated tests can read what's on the staff. */
+  _tagMidi(notes, midis) {
+    notes.forEach((note, i) => note.getSVGElement()?.setAttribute('data-midi', String(midis[i])));
+  }
+
   /** Flashcard-style single note, on whichever clef it naturally belongs to. */
   renderSingleNote(midi) {
     const width = 220;
@@ -37,6 +42,7 @@ export class Notation {
     voice.addTickables([note]);
     new Formatter().joinVoices([voice]).format([voice], width - 80);
     voice.draw(context, stave);
+    this._tagMidi([note], [midi]);
 
     return note;
   }
@@ -76,6 +82,7 @@ export class Notation {
       voice.addTickables(staveNotes);
       new Formatter().joinVoices([voice]).format([voice], measureWidth - 30);
       voice.draw(context, stave);
+      this._tagMidi(staveNotes, measureNotes.map((n) => n.midi));
 
       allNotes.push(...staveNotes);
       x += measureWidth;

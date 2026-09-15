@@ -43,6 +43,13 @@ export const SONGS = [
     timeSignature: '4/4',
     notes: seq(['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4']),
   },
+  {
+    id: 'joy-to-the-world',
+    title: 'Joy to the World (opening, simplified rhythm)',
+    bpm: 90,
+    timeSignature: '4/4',
+    notes: seq(['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'G4', 'A4', 'A4', 'B4', 'B4', 'C5']),
+  },
 ];
 
 /** Unique MIDI notes a song requires, used to decide when it unlocks. */

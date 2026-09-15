@@ -8,7 +8,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const DATA_DIR = path.join(__dirname, '..', 'data');
+// PIANO_DATA_DIR lets a test run use a throwaway directory instead of the learner's real progress.
+export const DATA_DIR = process.env.PIANO_DATA_DIR
+  ? path.resolve(process.env.PIANO_DATA_DIR)
+  : path.join(__dirname, '..', 'data');
 
 async function ensureDataDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });

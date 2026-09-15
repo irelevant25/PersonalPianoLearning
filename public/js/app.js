@@ -1,15 +1,24 @@
 import { PianoMIDI } from './midi.js';
-import { fetchState, saveProgress as apiSaveProgress, recordSession as apiRecordSession } from './api.js';
+import {
+  fetchState,
+  saveProgress as apiSaveProgress,
+  savePath as apiSavePath,
+  recordSession as apiRecordSession,
+} from './api.js';
 import { CURRICULUM } from '/shared/theory.js';
 import { getKnownNotes, createInitialNoteState } from '/shared/srs.js';
+import { createInitialPathProgress } from '/shared/path.js';
 
 import { renderHome } from './views/home.js';
+import { renderLesson } from './views/lesson.js';
 import { renderTrainer } from './views/trainer.js';
 import { renderSheet } from './views/sheet.js';
 import { renderSongs } from './views/songs.js';
 import { renderStats } from './views/stats.js';
 
-const views = { home: renderHome, trainer: renderTrainer, sheet: renderSheet, songs: renderSongs, stats: renderStats };
+const views = { home: renderHome, lesson: renderLesson, trainer: renderTrainer, sheet: renderSheet, songs: renderSongs, stats: renderStats };
+// Views without their own nav button highlight this one instead.
+const NAV_PARENT = { lesson: 'home' };
 
 const midi = new PianoMIDI();
 window.pianoMIDI = midi; // handy for debugging from the devtools console
@@ -17,8 +26,13 @@ window.pianoMIDI = midi; // handy for debugging from the devtools console
 const viewRoot = document.getElementById('view-root');
 const navButtons = [...document.querySelectorAll('.nav-btn')];
 
-let state = { progress: {}, sessions: [] };
+let state = { progress: {}, sessions: [], path: createInitialPathProgress() };
 let currentDestroy = null;
+
+// Saves are chained so PUTs reach the server in order; each one serializes the
+// latest state when it runs, so the last write always wins with fresh data.
+let progressSaves = Promise.resolve();
+let pathSaves = Promise.resolve();
 
 const ctx = {
   midi,
@@ -26,9 +40,16 @@ const ctx = {
   getState: () => state,
   getKnownNotes: () => getKnownNotes(state.progress, CURRICULUM),
   getNoteState: (midiNum) => state.progress[midiNum] || createInitialNoteState(midiNum),
-  async saveProgress(updatedProgress) {
+  saveProgress(updatedProgress) {
     state.progress = updatedProgress;
-    await apiSaveProgress(updatedProgress);
+    progressSaves = progressSaves.catch(() => {}).then(() => apiSaveProgress(state.progress));
+    return progressSaves;
+  },
+  getPathProgress: () => state.path,
+  savePathProgress(updatedPath) {
+    state.path = updatedPath;
+    pathSaves = pathSaves.catch(() => {}).then(() => apiSavePath(state.path));
+    return pathSaves;
   },
   async recordSession(session) {
     const saved = await apiRecordSession(session);
@@ -38,15 +59,18 @@ const ctx = {
   navigateTo,
 };
 
-function navigateTo(name) {
+/** @param {string} name @param {object} [params] - view-specific, e.g. { unitId, stepId } for 'lesson'. */
+function navigateTo(name, params = {}) {
   if (!views[name]) return;
   if (currentDestroy) {
     try { currentDestroy(); } catch (err) { console.error(err); }
     currentDestroy = null;
   }
-  navButtons.forEach((btn) => btn.classList.toggle('is-active', btn.dataset.view === name));
+  const navName = NAV_PARENT[name] || name;
+  navButtons.forEach((btn) => btn.classList.toggle('is-active', btn.dataset.view === navName));
   viewRoot.replaceChildren();
-  currentDestroy = views[name](viewRoot, ctx) || null;
+  window.scrollTo(0, 0);
+  currentDestroy = views[name](viewRoot, ctx, params) || null;
 }
 
 navButtons.forEach((btn) => {
@@ -117,7 +141,8 @@ midi.addEventListener('devicechange', (e) => renderDeviceOptions(e.detail));
 
 async function boot() {
   try {
-    state = await fetchState();
+    const loaded = await fetchState();
+    state = { ...state, ...loaded, path: loaded.path || createInitialPathProgress() };
   } catch (err) {
     console.error('Failed to load saved progress, starting fresh.', err);
   }

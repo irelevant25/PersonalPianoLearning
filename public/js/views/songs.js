@@ -1,9 +1,8 @@
 import { midiToName } from '/shared/theory.js';
-import { gradeAttempt, updateNoteState, isUnlocked } from '/shared/srs.js';
+import { isUnlocked } from '/shared/srs.js';
 import { SONGS, requiredNotes, isSongUnlocked } from '/shared/songs.js';
 import { PianoKeyboard } from '../keyboard.js';
-import { Notation } from '../notation.js';
-import { Metronome } from '../metronome.js';
+import { SequencePlayer, sessionFieldsFromResult } from '../sequence-player.js';
 
 export function renderSongs(container, ctx) {
   const progress = ctx.getState().progress;
@@ -37,7 +36,7 @@ function renderList(container, ctx, isKnown, nav) {
   container.innerHTML = `
     <div class="card">
       <h2>Songs</h2>
-      <p>Songs unlock automatically once you know every note they use. Keep practicing in Note Trainer to unlock more.</p>
+      <p>Songs unlock automatically once you know every note they use. The learning path teaches them one by one.</p>
       <ul class="song-list">${rows}</ul>
     </div>
   `;
@@ -52,17 +51,7 @@ function renderList(container, ctx, isKnown, nav) {
 
 function renderPlayer(container, ctx, song, isKnown, nav) {
   nav.cleanup();
-  const progress = { ...ctx.getState().progress };
   let bpm = song.bpm;
-  let index = 0;
-  let active = false;
-  let expectedTimes = [];
-  let secondsPerBeat = 60 / bpm;
-  let correctCount = 0;
-  let timingErrors = [];
-  let staveNotes = [];
-  let startedAt = null;
-  const metronome = new Metronome();
 
   container.innerHTML = `
     <div class="card">
@@ -93,103 +82,30 @@ function renderPlayer(container, ctx, song, isKnown, nav) {
 
   container.querySelector('#sg-back').addEventListener('click', () => renderList(container, ctx, isKnown, nav));
 
-  const notation = new Notation(container.querySelector('#sg-notation'));
   const keyboard = new PianoKeyboard(container.querySelector('#sg-keyboard'), { lowMidi: 48, highMidi: 84 });
   keyboard.markKnown(ctx.getKnownNotes());
-  const feedbackEl = container.querySelector('#sg-feedback');
   const startBtn = container.querySelector('#sg-start');
 
-  staveNotes = notation.renderSequence(song.notes, { timeSignature: song.timeSignature });
+  const player = new SequencePlayer({
+    ctx,
+    notationEl: container.querySelector('#sg-notation'),
+    keyboard,
+    feedbackEl: container.querySelector('#sg-feedback'),
+    async onFinish(result) {
+      startBtn.disabled = false;
+      try {
+        await ctx.recordSession({ mode: 'song', songId: song.id, songTitle: song.title, ...sessionFieldsFromResult(result) });
+      } catch (err) {
+        console.error('Failed to record session', err);
+      }
+    },
+  });
+  player.load(song.notes, { timeSignature: song.timeSignature });
 
-  function markCurrent() {
-    staveNotes.forEach((n, i) => {
-      const el = n.getSVGElement();
-      if (!el) return;
-      el.classList.remove('is-current', 'is-correct', 'is-incorrect');
-      if (i === index) el.classList.add('is-current');
-    });
-  }
-
-  function startAttempt() {
-    active = true;
-    index = 0;
-    correctCount = 0;
-    timingErrors = [];
-    startedAt = new Date().toISOString();
-    secondsPerBeat = 60 / bpm;
-    keyboard.clearStates();
-    markCurrent();
-    feedbackEl.textContent = 'Listen to the 4-beat count-in, then play along.';
-    feedbackEl.className = 'feedback';
+  startBtn.addEventListener('click', () => {
     startBtn.disabled = true;
+    player.start({ mode: 'tempo', bpm });
+  });
 
-    const { expectedPerformanceTimes } = metronome.schedule(song.notes.length, bpm, { leadInBeats: 4 });
-    expectedTimes = expectedPerformanceTimes;
-  }
-
-  async function finishAttempt() {
-    active = false;
-    startBtn.disabled = false;
-    const accuracy = Math.round((correctCount / song.notes.length) * 100);
-    const avgTimingError = timingErrors.length
-      ? Math.round(timingErrors.reduce((a, b) => a + Math.abs(b), 0) / timingErrors.length)
-      : null;
-    feedbackEl.textContent = `Done — ${correctCount}/${song.notes.length} correct (${accuracy}%)${avgTimingError !== null ? `, avg timing off by ${avgTimingError}ms` : ''}.`;
-    feedbackEl.className = accuracy >= 80 ? 'feedback feedback--correct' : 'feedback';
-
-    try {
-      await ctx.recordSession({
-        mode: 'song',
-        songId: song.id,
-        songTitle: song.title,
-        startedAt,
-        endedAt: new Date().toISOString(),
-        attempts: song.notes.length,
-        correct: correctCount,
-        accuracy,
-        bpm,
-        avgTimingErrorMs: avgTimingError,
-      });
-    } catch (err) {
-      console.error('Failed to record session', err);
-    }
-  }
-
-  async function onNoteOn(e) {
-    if (!active) return;
-    const played = e.detail.midi;
-    const target = song.notes[index].midi;
-    const correct = played === target;
-    const timingErrorMs = e.detail.timestamp - expectedTimes[index];
-    const timingToleranceMs = secondsPerBeat * 1000 * 0.5;
-    const grade = gradeAttempt({ correct, timingErrorMs, timingToleranceMs });
-
-    progress[target] = updateNoteState(progress[target] || ctx.getNoteState(target), grade, timingErrorMs);
-    if (correct) { correctCount += 1; timingErrors.push(timingErrorMs); }
-
-    const el = staveNotes[index].getSVGElement();
-    if (el) {
-      el.classList.remove('is-current');
-      el.classList.add(correct ? 'is-correct' : 'is-incorrect');
-    }
-    keyboard.setKeyState(played, correct ? 'correct' : 'incorrect');
-    setTimeout(() => keyboard.clearStates(), 250);
-
-    try {
-      await ctx.saveProgress(progress);
-    } catch (err) {
-      console.error('Failed to save progress', err);
-    }
-
-    index += 1;
-    if (index >= song.notes.length) {
-      finishAttempt();
-    } else {
-      markCurrent();
-    }
-  }
-
-  ctx.midi.addEventListener('noteon', onNoteOn);
-  nav.cleanup = () => ctx.midi.removeEventListener('noteon', onNoteOn);
-  startBtn.addEventListener('click', startAttempt);
+  nav.cleanup = () => player.destroy();
 }

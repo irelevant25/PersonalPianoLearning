@@ -29,6 +29,14 @@ export class Metronome {
     osc.stop(time + 0.09);
   }
 
+  /** Silences any clicks still scheduled (restart, or leaving the view mid-piece). */
+  stop() {
+    if (this.audioCtx) {
+      this.audioCtx.close().catch(() => {});
+      this.audioCtx = null;
+    }
+  }
+
   /**
    * Plays `leadInBeats` count-in clicks followed by one click per beat of
    * the sequence, at the given bpm. Returns the performance.now() timestamp

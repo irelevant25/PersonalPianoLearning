@@ -47,7 +47,9 @@ export function renderStats(container, ctx) {
   const recentSessions = [...sessions].reverse().slice(0, 15);
   const sessionRows = recentSessions.map((s) => {
     const date = new Date(s.startedAt || s.recordedAt).toLocaleString();
-    const label = s.mode === 'song' ? `Song: ${s.songTitle}` : s.mode === 'sheet' ? 'Sheet Practice' : 'Note Trainer';
+    const label = s.mode === 'lesson' ? `Lesson: ${s.label}`
+      : s.mode === 'song' ? `Song: ${s.songTitle}`
+        : s.mode === 'sheet' ? 'Sheet Practice' : 'Note Trainer';
     const timing = s.avgTimingErrorMs != null ? `${s.avgTimingErrorMs}ms` : '—';
     return `<tr><td>${date}</td><td>${label}</td><td>${s.correct}/${s.attempts}</td><td>${s.accuracy}%</td><td>${timing}</td></tr>`;
   }).join('');

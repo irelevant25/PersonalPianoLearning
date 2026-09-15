@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = require('../package.json');
 
 const HOST = pkg.config?.host || '127.0.0.1';
-const PORT = pkg.config?.port || 3000;
+const PORT = process.env.PORT || pkg.config?.port || 3000;
 
 const app = express();
 
